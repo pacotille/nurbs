@@ -1,0 +1,21 @@
+(c-include "nurbs-impl.h")
+
+(define-c-struct Point3D
+  predicate: Point3D?
+  constructor: (make-Point3D x y z)
+  (double x Point3D-x Point3D-x-set!)
+  (double y Point3D-y Point3D-y-set!)
+  (double z Point3D-z Point3D-z-set!))
+
+(define-c-struct NURBSCurve
+  predicate: NURBSCurve?
+  (int              degree      NURBSCurve-degree NURBSCurve-degree-set!)
+  ((pointer Point3D) control_points)
+  ((pointer double)  weights)
+  (int              n_knots     NURBSCurve-n-knots NURBSCurve-n-knots-set!))
+
+(define-c (pointer Point3D) (Intersection Intersection_ffi)
+  (NURBSCurve NURBSCurve))
+
+(define-c (pointer NURBSCurve) (make-line-curve make_line_curve)
+  (int int int double double))

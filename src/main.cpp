@@ -3,6 +3,7 @@
 #include <cmath>
 #include <string>
 
+#include <chibi/eval.h>
 #include "imgui.h"
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_opengl3.h"
@@ -143,9 +144,53 @@ static void drawCube(float modelview[16], float proj[16], bool wireframe, float 
     }
 }
 
+static sexp ctx = nullptr;
+static std::string repl_output = "Welcome to Scheme REPL!\n";
+static char input[4096] = "(+ 1 2 3)";
+
+
+// Évaluer une expression Scheme
+std::string eval_scheme(const char* expr) {
+    if (!ctx) return "Not initialized";
+    
+    sexp_gc_var1(result);
+    sexp_gc_preserve1(ctx, result);
+  
+    result = sexp_eval_string(ctx, expr, -1, NULL);
+    
+    std::string output;
+    if (sexp_exceptionp(result)) {
+printf("a\n");
+          sexp_gc_var1(msg);
+          sexp_gc_preserve1(ctx, msg);
+          msg = sexp_exception_message(ctx);
+          
+          if (sexp_stringp(msg)) { 
+           output = "Error";
+           output += sexp_string_data(msg);
+         } else {
+           output = "Error: (unknown error)";         
+         }
+        sexp_gc_release1(ctx);
+    } else if (result != SEXP_VOID) {
+        sexp_gc_var1(str);
+        sexp_gc_preserve1(ctx, str);
+        str = sexp_write_to_string(ctx, result);
+        output = sexp_string_data(str);
+        sexp_gc_release1(ctx);
+    }
+    
+    sexp_gc_release1(ctx);
+    return output;
+}
+
+
 // ─── Entry point ───────────────────────────────────────────────────────────────
 
 int main(int /*argc*/, char** /*argv*/) {
+
+    // In
+
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
@@ -202,8 +247,52 @@ int main(int /*argc*/, char** /*argv*/) {
     float wireAlpha   = 0.85f;
     bool  running     = true;
     Uint64 prevTime   = SDL_GetPerformanceCounter();
+    
+  // 3. Initialisation Chibi-Scheme
+    ctx = sexp_make_eval_context(NULL, NULL, NULL, 0, 0);
+    sexp_load_standard_env(ctx, nullptr, SEXP_SEVEN);
+  //  sexp_load_stdlib(ctx);
 
-    while (running) {
+
+
+
+
+
+/*
+
+
+  while (1) {
+        printf("chibi> ");
+        fflush(stdout);
+
+        if (!fgets(input, sizeof(input), stdin)) {
+            break; // Quitte si EOF (Ctrl+D)
+        }
+
+        // Commande pour quitter manuellement
+        if (strncmp(input, "exit", 4) == 0) {
+            break;
+        }
+
+        // 5. Évaluation de la chaîne de caractères
+        // -1 indique que la chaîne est terminée par '\0', NULL utilise l'environnement par défaut
+        sexp res = sexp_eval_string(ctx, input, -1, NULL);
+
+        // 6. Gestion du résultat ou de l'erreur
+        if (sexp_exceptionp(res)) {
+            // Afficher proprement l'exception Scheme
+            sexp_print_exception(ctx, res, sexp_current_error_port(ctx));
+        } else if (res != SEXP_VOID) {
+            // Afficher le résultat si l'expression retourne une valeur (ex: pas une simple définition)
+            sexp_write(ctx, res, sexp_current_output_port(ctx));
+            printf("\n");
+        }
+
+}    
+    
+   return 1;
+*/
+   while (running) {
         // ── Delta time ─────────────────────────────────────────────────────
         Uint64 now = SDL_GetPerformanceCounter();
         float dt = float(now - prevTime) / float(SDL_GetPerformanceFrequency());
@@ -289,8 +378,40 @@ int main(int /*argc*/, char** /*argv*/) {
         ImGui::Text("dt  : %.2f ms", dt * 1000.0f);
         ImGui::Text("ESC to quit");
 
+
         ImGui::End();
 
+
+        // Interface
+        ImGui::Begin("Scheme REPL", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+       
+        ImGui::Text("Output:");
+        ImGui::InputTextMultiline("##output",
+             (char*)repl_output.c_str(),
+             repl_output.size(),
+             ImVec2(700, 300),
+             ImGuiInputTextFlags_ReadOnly);
+        
+        ImGui::Separator();         
+        ImGui::InputTextMultiline("##input", input, sizeof(input), 
+            ImVec2(700, 100), ImGuiInputTextFlags_CtrlEnterForNewLine);
+    
+        if (ImGui::Button("Eval") || (ImGui::IsItemFocused() && ImGui::IsKeyPressed(ImGuiKey_Enter))) {
+ 
+            std::string result = eval_scheme(input);
+            repl_output += "> " + std::string(input) + "\n" + result + "\n\n";
+            input[0] = '\0';
+        }
+        
+        ImGui::SameLine();
+        if (ImGui::Button("Clear")) {
+            repl_output.clear();
+            repl_output = "Welcome to Scheme REPL!\n";
+        }
+        
+
+        ImGui::End();
+        
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
